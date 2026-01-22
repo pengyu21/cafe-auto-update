@@ -217,6 +217,7 @@ class NaverCafePoster:
                 (By.CSS_SELECTOR, "a.BaseButtonLink.BaseButton--skinGreen"),
                 (By.CLASS_NAME, "BaseButtonLink"),
                 (By.XPATH, "//a[contains(@class, 'BaseButtonLink')]"),
+                (By.XPATH, "//a[contains(@class, 'BaseButton')]"), # Broader check
                 # Fallbacks
                 (By.XPATH, "//span[@class='BaseButton__txt' and contains(text(), '글쓰기')]"),
                 (By.CSS_SELECTOR, "a.btn_write"),
@@ -228,31 +229,50 @@ class NaverCafePoster:
                 for by, val in write_selectors:
                     try:
                         ele = self.driver.find_element(by, val)
-                        if ele: return ele
+                        if ele and ele.is_displayed(): return ele
                     except: continue
                 return None
 
+            # 1st Try: Current context
             write_btn = find_write_btn()
 
-            # Retry logic: If not found, try switching frame
+            # 2nd Try: Force switch to cafe_main
             if not write_btn:
-                self.log("[시스템] 버튼 못찾음 -> 프레임 재설정 후 시도")
+                self.log("[재시도] 버튼 못찾음 -> cafe_main 프레임 전환 시도")
                 self.driver.switch_to.default_content()
+                time.sleep(1)
+                
+                frame_switched = False
                 try:
-                    WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                    # Method 1: Wait for frame
+                    WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                    frame_switched = True
+                    self.log("[시스템] cafe_main 진입 성공 (Method 1)")
+                except:
+                    # Method 2: Find element directly
+                    try:
+                        self.log("[경고] Wait 실패 -> 직접 프레임 찾기 시도")
+                        frame_elem = self.driver.find_element(By.ID, "cafe_main")
+                        self.driver.switch_to.frame(frame_elem)
+                        frame_switched = True
+                        self.log("[시스템] cafe_main 진입 성공 (Method 2)")
+                    except Exception as e:
+                        self.log(f"[치명적 오류] 프레임 전환 불가: {e}")
+                
+                if frame_switched:
+                    time.sleep(2) # Wait for internal render
                     write_btn = find_write_btn()
-                except: pass
 
             if write_btn:
                  try:
                     write_btn.click()
-                    self.log("[진행] '글쓰기' 버튼 클릭")
+                    self.log("[진행] '글쓰기' 버튼 클릭 성공")
                  except Exception as e:
-                    self.log(f"[오류] 버튼 클릭 실패: {e}")
+                    self.log(f"[오류] 버튼 클릭 에러 (JS 시도): {e}")
                     self.driver.execute_script("arguments[0].click();", write_btn)
             else:
-                self.log("[오류] '글쓰기' 버튼 최종 실패 (스크린샷 debug_write_fail.png)")
-                self.driver.save_screenshot("debug_write_fail.png")
+                self.log("[오류] '글쓰기' 버튼 최종 발견 실패")
+                self.driver.save_screenshot("debug_write_final_fail.png")
                 return
 
             time.sleep(3)

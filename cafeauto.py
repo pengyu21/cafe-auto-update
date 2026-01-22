@@ -26,14 +26,22 @@ class NaverCafePoster:
 
     def setup_driver(self):
         """Initializes the Chrome driver with options."""
-        chrome_options = Options()
-        # Add options to make it less detectable as bot
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
+        options = Options()
+        # Headless Mode Settings
+        options.add_argument("--headless=new") # Modern headless mode
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
         
-        self.driver = webdriver.Chrome(options=chrome_options)
+        options.add_experimental_option("detach", True)
+        options.add_experimental_option("prefs", {
+            "profile.default_content_setting_values.notifications": 2,
+            "profile.default_content_settings.popups": 0
+        })
+        
+        self.driver = webdriver.Chrome(options=options)
         self.driver.maximize_window()
         self.driver.implicitly_wait(10)
 
@@ -452,36 +460,18 @@ class NaverCafePoster:
                     timestamp = now.strftime(f"%Y-%m-%d ({day_str}) %H:%M")
                     
                     # Update Sheet
-                    self.main_sheet.update_cell(row_index, 11, post_url)
-                    self.main_sheet.update_cell(row_index, 12, timestamp)
-                    print(f"Updated sheet for row {row_index}")
+                    try:
+                        self.main_sheet.update_cell(row_index, 11, post_url)
+                        self.main_sheet.update_cell(row_index, 12, timestamp)
+                        print(f"[SUCCESS] Updated sheet for row {row_index}")
+                    except Exception as sheet_e:
+                        print(f"[ERROR] Failed to write to sheet: {sheet_e}")
+
                 else:
                     print("[ERROR] Could not find URL copy button.")
-                    # Take screenshot for debug
                     self.driver.save_screenshot("debug_post_fail.png")
             except Exception as e:
-                print(f"Error in post-processing: {e}")
-
-
-                
-                # Timestamp
-                now = datetime.datetime.now()
-                # Format: "YYYY-MM-DD (Tue) HH:MM"
-                # Need Korean day name? User example: "YYYY-MM-DD (DDD) HH:MM" where DDD is usually Mon/Tue or 월/화
-                # Python %a gives Mon/Tue. User is likely Korean, might prefer Korean days.
-                days = ["월", "화", "수", "목", "금", "토", "일"]
-                day_str = days[now.weekday()]
-                timestamp = now.strftime(f"%Y-%m-%d ({day_str}) %H:%M")
-                
-                # Update Sheet
-                # Col K = 11, Col L = 12
-                # processing row_index (1-based from loop)
-                self.main_sheet.update_cell(row_index, 11, post_url)
-                self.main_sheet.update_cell(row_index, 12, timestamp)
-                print(f"Updated sheet for row {row_index}")
-                
-            except Exception as e:
-                print(f"Error in post-processing: {e}")
+                print(f"[ERROR] Error in post-processing: {e}")
 
 
         except Exception as e:

@@ -201,58 +201,58 @@ class NaverCafePoster:
                     board_link.click()
                     board_found = True
                     self.log(f"[진행] 게시판 접속 (메인): '{board_name}'")
-                    time.sleep(2)
+                    time.sleep(0.5) 
                     try:
-                         WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                         WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
                     except: pass
                 except NoSuchElementException:
                     self.log(f"[오류] 게시판을 찾을 수 없음: '{board_name}'")
                     return
 
-            time.sleep(3)
+            time.sleep(1) # Sleep reduced
 
             # 6. Click '글쓰기'
-            # Force switch to cafe_main if not already
-            self.driver.switch_to.default_content()
-            try:
-                # Increased timeout to 15s to ensure frame is loaded
-                WebDriverWait(self.driver, 15).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
-                self.log("[시스템] cafe_main 프레임 전환 성공")
-            except:
-                self.log("[주의] cafe_main 프레임 전환 실패 (또는 타임아웃). 메인 컨텐츠에서 검색 시도.")
-
-            write_btn = None
             write_selectors = [
-                # User provided class logic
+                 # User provided
                 (By.CSS_SELECTOR, "a.BaseButtonLink.BaseButton--skinGreen"),
                 (By.CLASS_NAME, "BaseButtonLink"),
                 (By.XPATH, "//a[contains(@class, 'BaseButtonLink')]"),
-                
-                # Previous logic
+                # Fallbacks
                 (By.XPATH, "//span[@class='BaseButton__txt' and contains(text(), '글쓰기')]"),
-                (By.ID, "write-btn"),
-                (By.ID, "cafe-write-btn"),
                 (By.CSS_SELECTOR, "a.btn_write"),
+                (By.ID, "write-btn"),
                 (By.LINK_TEXT, "글쓰기")
             ]
             
-            for by, val in write_selectors:
+            def find_write_btn():
+                for by, val in write_selectors:
+                    try:
+                        ele = self.driver.find_element(by, val)
+                        if ele: return ele
+                    except: continue
+                return None
+
+            write_btn = find_write_btn()
+
+            # Retry logic: If not found, try switching frame
+            if not write_btn:
+                self.log("[시스템] 버튼 못찾음 -> 프레임 재설정 후 시도")
+                self.driver.switch_to.default_content()
                 try:
-                    write_btn = self.driver.find_element(by, val)
-                    if write_btn: break
-                except: continue
-                
+                    WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                    write_btn = find_write_btn()
+                except: pass
+
             if write_btn:
                  try:
                     write_btn.click()
                     self.log("[진행] '글쓰기' 버튼 클릭")
                  except Exception as e:
                     self.log(f"[오류] 버튼 클릭 실패: {e}")
-                    # Try JS click
                     self.driver.execute_script("arguments[0].click();", write_btn)
             else:
-                self.log("[오류] '글쓰기' 버튼을 찾을 수 없음 (스크린샷 저장)")
-                self.driver.save_screenshot("debug_write_btn_fail.png")
+                self.log("[오류] '글쓰기' 버튼 최종 실패 (스크린샷 debug_write_fail.png)")
+                self.driver.save_screenshot("debug_write_fail.png")
                 return
 
             time.sleep(3)

@@ -215,12 +215,20 @@ class NaverCafePoster:
             # Force switch to cafe_main if not already
             self.driver.switch_to.default_content()
             try:
-                WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                # Increased timeout to 15s to ensure frame is loaded
+                WebDriverWait(self.driver, 15).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                self.log("[시스템] cafe_main 프레임 전환 성공")
             except:
-                self.log("[주의] cafe_main 프레임 전환 실패 (또는 이미 내부)")
+                self.log("[주의] cafe_main 프레임 전환 실패 (또는 타임아웃). 메인 컨텐츠에서 검색 시도.")
 
             write_btn = None
             write_selectors = [
+                # User provided class logic
+                (By.CSS_SELECTOR, "a.BaseButtonLink.BaseButton--skinGreen"),
+                (By.CLASS_NAME, "BaseButtonLink"),
+                (By.XPATH, "//a[contains(@class, 'BaseButtonLink')]"),
+                
+                # Previous logic
                 (By.XPATH, "//span[@class='BaseButton__txt' and contains(text(), '글쓰기')]"),
                 (By.ID, "write-btn"),
                 (By.ID, "cafe-write-btn"),

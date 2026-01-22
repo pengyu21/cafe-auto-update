@@ -212,12 +212,39 @@ class NaverCafePoster:
             time.sleep(3)
 
             # 6. Click '글쓰기'
+            # Force switch to cafe_main if not already
+            self.driver.switch_to.default_content()
             try:
-                 write_btn = self.driver.find_element(By.XPATH, "//span[@class='BaseButton__txt' and contains(text(), '글쓰기')]")
-                 write_btn.click()
-                 self.log("[진행] 글쓰기 버튼 클릭")
-            except NoSuchElementException:
-                self.log("[오류] '글쓰기' 버튼을 찾을 수 없음")
+                WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+            except:
+                self.log("[주의] cafe_main 프레임 전환 실패 (또는 이미 내부)")
+
+            write_btn = None
+            write_selectors = [
+                (By.XPATH, "//span[@class='BaseButton__txt' and contains(text(), '글쓰기')]"),
+                (By.ID, "write-btn"),
+                (By.ID, "cafe-write-btn"),
+                (By.CSS_SELECTOR, "a.btn_write"),
+                (By.LINK_TEXT, "글쓰기")
+            ]
+            
+            for by, val in write_selectors:
+                try:
+                    write_btn = self.driver.find_element(by, val)
+                    if write_btn: break
+                except: continue
+                
+            if write_btn:
+                 try:
+                    write_btn.click()
+                    self.log("[진행] '글쓰기' 버튼 클릭")
+                 except Exception as e:
+                    self.log(f"[오류] 버튼 클릭 실패: {e}")
+                    # Try JS click
+                    self.driver.execute_script("arguments[0].click();", write_btn)
+            else:
+                self.log("[오류] '글쓰기' 버튼을 찾을 수 없음 (스크린샷 저장)")
+                self.driver.save_screenshot("debug_write_btn_fail.png")
                 return
 
             time.sleep(3)

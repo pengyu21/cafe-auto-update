@@ -148,21 +148,21 @@ class NaverCafePoster:
                 # You might handle this more gracefully
                 pass
 
-            # Mapping based on user structure:
-            # A: Num(0), B: Date(1), C: Name(2), D: Title(3), E: Review(4), F: Keywords(5), G: Cafe(6), H: Board(7), I: Body(8), J: ImgPath(9)
+            # Correct Mapping (0-indexed) based on user manual edits:
+            # B(1)=Name, C(2)=ID, D(3)=PW, E(4)=Review, F(5)=Cafe, G(6)=Board, H(7)=Title, I(8)=Body, J(9)=ImgPath
             
-            user_id = "zmzzang1397" # Fixed ID 
-            user_pw = "wjdgus1234!" # Fixed PW 
+            user_id = row_values[2] if len(row_values) > 2 else "" # C column
+            user_pw = row_values[3] if len(row_values) > 3 else "" # D column (Password)
             
-            cafe_name_key = row_values[6] if len(row_values) > 6 else "" # G column
-            board_name = row_values[7] if len(row_values) > 7 else ""    # H column
-            title = row_values[3] if len(row_values) > 3 else ""         # D column
+            cafe_name_key = row_values[5] if len(row_values) > 5 else "" # F column
+            board_name = row_values[6] if len(row_values) > 6 else ""    # G column
+            title = row_values[7] if len(row_values) > 7 else ""         # H column
             review_text = row_values[4] if len(row_values) > 4 else ""   # E column
             content = row_values[8] if len(row_values) > 8 else ""       # I column
             image_folder = row_values[9] if len(row_values) > 9 else ""  # J column
-
-            if not user_id or not user_pw or not cafe_name_key:
-                self.log(f"[건너뜀] 행 {row_index}: ID/PW/카페명 누락.")
+            
+            if not user_id or not cafe_name_key:
+                self.log(f"[건너뜀] 행 {row_index}: ID 또는 카페명이 누락되었습니다.")
                 return
 
             self.log(f"▶ 작업 시작: {cafe_name_key} - {title} (행 {row_index})")
@@ -186,36 +186,41 @@ class NaverCafePoster:
                 WebDriverWait(self.driver, 15).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
                 self.log("[시스템] 메인 프레임(cafe_main) 진입 완료")
             except:
-                self.log("[오류] cafe_main 프레임을 찾지 못했습니다.")
-                return
+                self.log("[오류] cafe_main 프레임 전환 실패. (메뉴가 바깥에 있을 수 있음)")
+                self.driver.switch_to.default_content()
                 
             # 5. Click Board Name
-            self.log(f"[진행] 게시판 목록에서 '{board_name}' 찾는 중...")
+            self.log(f"[진행] 게시판 목록에서 '{board_name}' 탐색 중...")
             board_found = False
+            
+            # 1st try: Inside current frame
             try:
-                # 1st attempt: In cafe_main
                 board_link = self.driver.find_element(By.PARTIAL_LINK_TEXT, board_name)
                 board_link.click()
                 board_found = True
                 self.log(f"[진행] 게시판 접속 성공: '{board_name}'")
             except NoSuchElementException:
-                # 2nd attempt: Back to default content
-                self.log(f"[정보] '{board_name}'을(를) 현재 프레임에서 찾지 못함. 사이드 메뉴 탐색 중...")
+                # 2nd try: Outside frame (Top/Side menu)
+                self.log(f"[정보] '{board_name}'을 프레임 안에서 못 찾음. 바깥쪽 재탐색...")
                 self.driver.switch_to.default_content()
                 try:
                     board_link = self.driver.find_element(By.PARTIAL_LINK_TEXT, board_name)
                     board_link.click()
                     board_found = True
                     self.log(f"[진행] 게시판 접속 성공 (사이드 메뉴): '{board_name}'")
-                    # Many cafes load board in cafe_main after click
-                    time.sleep(1)
-                    try:
-                        WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
-                        self.log("[시스템] 게시판 이동 후 cafe_main 재진입 성공")
-                    except: pass
                 except NoSuchElementException:
-                    self.log(f"[오류] 게시판을 찾을 수 없습니다: '{board_name}'")
-                    return
+                     self.log(f"[오류] '{board_name}' 게시판을 카페 어디에서도 찾을 수 없습니다.")
+                     return
+
+            # After clicking, we usually need to re-enter cafe_main to find the 'Write' button
+            if board_found:
+                time.sleep(1.5)
+                try:
+                    self.driver.switch_to.default_content()
+                    WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                    self.log("[시스템] 게시판 이동 후 cafe_main 재진입 성공")
+                except:
+                    self.log("[경고] 게시판 이동 후 cafe_main 진입 실패")
 
             time.sleep(1) # Sleep reduced
 
@@ -416,22 +421,24 @@ class NaverCafePoster:
                     except: pass
                 
                 if url_btn:
-                    url_btn.click()
-                    time.sleep(1.5)
+                    # Clear clipboard BEFORE click
+                    pyperclip.copy("") 
                     
-                    # Ensure clipboard has new data
-                    pyperclip.copy("") # Clear first
-                    post_url = pyperclip.paste()
+                    url_btn.click()
+                    self.log("[진행] URL 복사 버튼 클릭 완료")
+                    time.sleep(2) # Wait for clipboard
+                    
+                    post_url = pyperclip.paste().strip()
                     
                     # Retry if empty
                     if not post_url:
-                        time.sleep(1)
-                        post_url = pyperclip.paste()
+                        self.log("[정보] 클립보드가 비어있음. 재시도 중...")
+                        url_btn.click() # One more try
+                        time.sleep(2)
+                        post_url = pyperclip.paste().strip()
                     
                     if not post_url:
-                        self.log("[경고] 클립보드에서 URL을 가져오지 못했습니다.")
-                        # Fallback: Current URL?
-                        # Usually popup or modal.
+                        self.log("[경고] 클립보드에서 URL을 가져오지 못했습니다. (수동 입력 필요)")
                     else:
                         self.log(f"[성공] 게시글 URL 확인: {post_url}")
                         
@@ -442,7 +449,12 @@ class NaverCafePoster:
                         
                         try:
                             # Update Sheet
-                            self.main_sheet.update_cell(row_index, 11, post_url)
+                            self.log(f"[상태] 시트 업데이트 중 (행 {row_index})...")
+                            self.main_sheet.update_cell(row_index, 11, post_url) # K column
+                            self.main_sheet.update_cell(row_index, 12, timestamp) # L column
+                            self.log(f"[기록] 시트 업데이트 완료: {post_url} / {timestamp}")
+                        except Exception as sheet_e:
+                            self.log(f"[오류] 시트 기록 실패: {sheet_e}")
                             self.main_sheet.update_cell(row_index, 12, timestamp)
                             self.log(f"[기록] 시트 업데이트 완료 (행 {row_index})")
                         except Exception as sheet_e:
@@ -483,13 +495,13 @@ class NaverCafePoster:
             else:
                 # Check Col K (index 10)
                 url = row[10].strip()
-                if not url and row[2].strip(): # Empty URL and has Name (C column)
+                if not url and len(row) > 1 and row[1].strip(): # Has Name (B column)
                      pending_rows.append({
                          'index': i + 1,
-                         'name': row[2] if len(row) > 2 else "", # Col C (Index 2)
-                         'cafe': row[6] if len(row) > 6 else "", # Col G (Index 6)
-                         'board': row[7] if len(row) > 7 else "", # Col H (Index 7)
-                         'title': row[3] if len(row) > 3 else "", # Col D (Index 3)
+                         'name': row[1] if len(row) > 1 else "", # Col B (Index 1)
+                         'cafe': row[5] if len(row) > 5 else "", # Col F (Index 5)
+                         'board': row[6] if len(row) > 6 else "", # Col G (Index 6)
+                         'title': row[7] if len(row) > 7 else "", # Col H (Index 7)
                          'review_text': row[4] if len(row) > 4 else "" # Col E (Index 4)
                      })
                      

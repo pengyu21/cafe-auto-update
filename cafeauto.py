@@ -148,18 +148,24 @@ class NaverCafePoster:
                 # You might handle this more gracefully
                 pass
 
-            # Correct Mapping (0-indexed) based on user manual edits:
-            # B(1)=Name, C(2)=ID, D(3)=PW, E(4)=Review, F(5)=Cafe, G(6)=Board, H(7)=Title, I(8)=Body, J(9)=ImgPath
+            # Correct Mapping (0-indexed) based on NEW 11-column structure:
+            # B(1)=Name, C(2)=ID, D(3)=PW, E(4)=BeforeFolder, F(5)=AfterFolder, G(6)=Cafe, H(7)=Board, I(8)=Title, J(9)=Body, K(10)=File, L(11)=URL
             
             user_id = row_values[2] if len(row_values) > 2 else "" # C column
-            user_pw = row_values[3] if len(row_values) > 3 else "" # D column (Password)
+            user_pw = row_values[3] if len(row_values) > 3 else "" # D column
             
-            cafe_name_key = row_values[5] if len(row_values) > 5 else "" # F column
-            board_name = row_values[6] if len(row_values) > 6 else ""    # G column
-            title = row_values[7] if len(row_values) > 7 else ""         # H column
-            review_text = row_values[4] if len(row_values) > 4 else ""   # E column
-            content = row_values[8] if len(row_values) > 8 else ""       # I column
-            image_folder = row_values[9] if len(row_values) > 9 else ""  # J column
+            before_folder = row_values[4] if len(row_values) > 4 else "" # E column
+            after_folder = row_values[5] if len(row_values) > 5 else ""  # F column
+            
+            cafe_name_key = row_values[6] if len(row_values) > 6 else "" # G column
+            board_name = row_values[7] if len(row_values) > 7 else ""    # H column
+            title = row_values[8] if len(row_values) > 8 else ""         # I column
+            body_text = row_values[9] if len(row_values) > 9 else ""     # J column
+            image_folder = row_values[10] if len(row_values) > 10 else "" # K column
+            
+            if not user_id or not cafe_name_key:
+                self.log(f"[건너뜀] 행 {row_index}: ID 또는 카페명이 누락되었습니다.")
+                return
             
             if not user_id or not cafe_name_key:
                 self.log(f"[건너뜀] 행 {row_index}: ID 또는 카페명이 누락되었습니다.")
@@ -372,31 +378,54 @@ class NaverCafePoster:
                     time.sleep(0.5)
                 except: pass
 
-            img_before = self.find_image_file(image_folder, "전")
-            if img_before:
-                upload_image(img_before)
-                append_text("수술전")
+            # 9. Sequential Image & Text Input
+            def upload_folder_images(folder):
+                if not folder or not os.path.isdir(folder): return
+                files = [f for f in glob.glob(os.path.join(folder, "*")) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+                if not files: return
+                self.log(f"[이미지] '{folder}' 내 이미지 {len(files)}개 업로드 중...")
+                for f in files:
+                    upload_image(f)
+                    time.sleep(1)
+
+            # Sequence: Title already entered.
+            # 1. Before Surgery
+            if before_folder:
+                upload_folder_images(before_folder)
                 insert_newlines(1)
             
-            img_after = self.find_image_file(image_folder, "후")
-            if img_after:
-                upload_image(img_after)
-                
-            review_text = row_values[4] if len(row_values) > 4 else ""
-            final_text = ""
-            if review_text: final_text += review_text + "\n\n"
-            if content: final_text += content
-            if final_text:
-                self.log(f"[본문] 내용 입력 중 ({len(final_text)}자)...")
-                append_text(final_text)
+            # 2. After Surgery
+            if after_folder:
+                upload_folder_images(after_folder)
+                insert_newlines(1)
+            
+            # 3. Body Text
+            if body_text:
+                self.log(f"[본문] 내용 입력 중 ({len(body_text)}자)...")
+                append_text(body_text)
 
             time.sleep(2)
+
+            # 10. Adjust settings before registration
+            try:
+                self.log("[진행] 게시글 설정(전체공개 등) 조정 중...")
+                open_set_btn = self.driver.find_element(By.CSS_SELECTOR, "button.btn_open_set")
+                open_set_btn.click()
+                time.sleep(1)
+                
+                # Set to Public (전체공개)
+                all_radio = self.driver.find_element(By.ID, "all")
+                if not all_radio.is_selected():
+                    all_radio.click() # This might need label click depending on UI
+                    self.log("[시스템] '전체공개' 설정 확인")
+            except Exception as e:
+                self.log(f"[경고] 설정 조정 실패 (이미 설정되어 있을 수 있음): {e}")
 
             # 11. Click Register
             try:
                 register_btn = self.driver.find_element(By.XPATH, "//span[@class='BaseButton__txt' and text()='등록']")
                 register_btn.click()
-                self.log("[진행] '등록' 버튼 클릭 완료")
+                self.log("[진행] '등록' 버튼 클릭 마침")
             except NoSuchElementException:
                 self.log("[오류] 등록 버튼 못찾음")
                 return 
@@ -450,8 +479,8 @@ class NaverCafePoster:
                         try:
                             # Update Sheet
                             self.log(f"[상태] 시트 업데이트 중 (행 {row_index})...")
-                            self.main_sheet.update_cell(row_index, 11, post_url) # K column
-                            self.main_sheet.update_cell(row_index, 12, timestamp) # L column
+                            self.main_sheet.update_cell(row_index, 12, post_url) # L column
+                            self.main_sheet.update_cell(row_index, 13, timestamp) # M column
                             self.log(f"[기록] 시트 업데이트 완료: {post_url} / {timestamp}")
                         except Exception as sheet_e:
                             self.log(f"[오류] 시트 기록 실패: {sheet_e}")
@@ -479,30 +508,28 @@ class NaverCafePoster:
         # Start from row 4 (index 3)
         for i in range(3, len(all_values)):
             row = all_values[i]
-            # Check if sufficient columns, or pad
-            if len(row) < 11:
-                 # If row is too short, it definitely has no URL
-                 # Check if it has essential data (ID at index 2)
-                 if len(row) > 2 and row[2].strip():
+            # Check if sufficient columns (L is index 11)
+            if len(row) < 12:
+                 if len(row) > 1 and row[1].strip(): # Has Name (B column)
                      pending_rows.append({
-                         'index': i + 1, # 1-based index for gspread
-                         'name': row[1] if len(row) > 1 else "", # Col B (Index 1)
-                         'cafe': row[5] if len(row) > 5 else "",
-                         'board': row[6] if len(row) > 6 else "",
-                         'title': row[7] if len(row) > 7 else "",
-                         'review_text': row[4] if len(row) > 4 else "" # Col E (Index 4)
+                         'index': i + 1,
+                         'name': row[1] if len(row) > 1 else "",           # Col B (Index 1)
+                         'cafe': row[6] if len(row) > 6 else "",           # Col G (Index 6)
+                         'board': row[7] if len(row) > 7 else "",          # Col H (Index 7)
+                         'title': row[8] if len(row) > 8 else "",          # Col I (Index 8)
+                         'review_text': row[4] if len(row) > 4 else ""     # Col E (Index 4)
                      })
             else:
-                # Check Col K (index 10)
-                url = row[10].strip()
+                # Check Col L (index 11)
+                url = row[11].strip()
                 if not url and len(row) > 1 and row[1].strip(): # Has Name (B column)
                      pending_rows.append({
                          'index': i + 1,
-                         'name': row[1] if len(row) > 1 else "", # Col B (Index 1)
-                         'cafe': row[5] if len(row) > 5 else "", # Col F (Index 5)
-                         'board': row[6] if len(row) > 6 else "", # Col G (Index 6)
-                         'title': row[7] if len(row) > 7 else "", # Col H (Index 7)
-                         'review_text': row[4] if len(row) > 4 else "" # Col E (Index 4)
+                         'name': row[1] if len(row) > 1 else "", 
+                         'cafe': row[6] if len(row) > 6 else "",
+                         'board': row[7] if len(row) > 7 else "",
+                         'title': row[8] if len(row) > 8 else "",
+                         'review_text': row[4] if len(row) > 4 else ""
                      })
                      
         return pending_rows

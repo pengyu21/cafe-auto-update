@@ -17,6 +17,14 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1ct7wA-ICHZREYGNdYRSjlXBW4rUfEuI1U_BDMOLJ8h8/edit?gid=0#gid=0"
 CREDENTIALS_FILE = "service_account.json"
 
+# Version logic
+BOT_VERSION = "1.0.22"
+if os.path.exists("version.txt"):
+    try:
+        with open("version.txt", "r", encoding="utf-8") as f:
+            BOT_VERSION = f.read().strip()
+    except: pass
+
 class NaverCafePoster:
     def __init__(self, log_callback=None):
         self.driver = None
@@ -24,6 +32,8 @@ class NaverCafePoster:
         self.main_sheet = None
         self.board_sheet = None
         self.log_callback = log_callback # Function to send logs to GUI
+        self.log(f"[부팅] NaverCafePoster v{BOT_VERSION} 로드됨")
+        self.log(f"[부팅] 경로: {os.path.abspath(__file__)}")
 
     def log(self, message):
         """Logs message to console and GUI if callback provided."""

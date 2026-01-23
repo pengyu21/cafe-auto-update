@@ -18,11 +18,59 @@ if os.path.exists("version.txt"):
 # Google Sheet URL
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1ct7wA-ICHZREYGNdYRSjlXBW4rUfEuI1U_BDMOLJ8h8/edit?gid=0#gid=0"
 
+# Admin Credentials (Update these as needed)
+ADMIN_ID = "byulstar"
+ADMIN_PW = "byul1102@@"
+
 class CafeAutomationGUI:
     def __init__(self, root):
         self.root = root
+        self.root.withdraw() # Hide main window initially
+        self.login_window(root)
+        
+    def login_window(self, root):
+        self.win = tk.Toplevel(root)
+        self.win.title("관리자 로그인")
+        self.win.geometry("300x200")
+        self.win.resizable(False, False)
+        self.win.protocol("WM_DELETE_WINDOW", root.quit)
+        
+        # Center the login window
+        self.win.update_idletasks()
+        width = self.win.winfo_width()
+        height = self.win.winfo_height()
+        x = (self.win.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.win.winfo_screenheight() // 2) - (height // 2)
+        self.win.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+
+        tk.Label(self.win, text="매니저 아이디:", pady=5).pack()
+        self.id_ent = tk.Entry(self.win)
+        self.id_ent.pack()
+        
+        tk.Label(self.win, text="비밀번호:", pady=5).pack()
+        self.pw_ent = tk.Entry(self.win, show="*")
+        self.pw_ent.pack()
+        
+        tk.Button(self.win, text="로그인", command=self.check_login, pady=5, width=15).pack(pady=10)
+        self.id_ent.focus_set()
+        
+        # Bind Enter key
+        self.win.bind('<Return>', lambda e: self.check_login())
+
+    def check_login(self):
+        entered_id = self.id_ent.get()
+        entered_pw = self.pw_ent.get()
+        
+        if entered_id == ADMIN_ID and entered_pw == ADMIN_PW:
+            self.win.destroy()
+            self.setup_main_ui()
+            self.root.deiconify() # Show main window
+        else:
+            messagebox.showerror("로그인 실패", "아이디 또는 비밀번호가 일치하지 않습니다.")
+
+    def setup_main_ui(self):
         self.root.title(f"카페 후기 자동화 (v{VERSION})")
-        self.root.geometry("900x600") # Expanded size
+        self.root.geometry("1000x700") # Expanded size
         
         # Initialize Bot with Log Callback
         self.bot = NaverCafePoster(log_callback=self.log_message)

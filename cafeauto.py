@@ -534,8 +534,9 @@ class NaverCafePoster:
                         self.log(f"[성공] 게시글 URL 확인: {post_url}")
                         
                         now = datetime.datetime.now()
-                        days = ["월", "화", "수", "목", "금", "토", "일"]
-                        day_str = days[now.weekday()]
+                        # Use English names to avoid Unicode/Locale encoding errors on some PCs
+                        days_eng = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                        day_str = days_eng[now.weekday()]
                         timestamp = now.strftime(f"%Y-%m-%d ({day_str}) %H:%M")
                         
                         try:

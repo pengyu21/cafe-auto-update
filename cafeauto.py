@@ -37,11 +37,19 @@ class NaverCafePoster:
 
     def log(self, message):
         """Logs message to console and GUI if callback provided."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        formatted = f"[{timestamp}] {message}"
-        print(formatted)
+        try:
+            timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+            formatted = f"[{timestamp}] {message}"
+            try:
+                print(formatted)
+            except UnicodeEncodeError:
+                # Fallback for systems with non-UTF8 console
+                print(formatted.encode('ascii', 'ignore').decode('ascii'))
+        except: 
+            pass # Never let logging crash the bot
+
         if self.log_callback:
-            self.log_callback(message) # Send raw message, GUI adds timestamp or format if needed
+            self.log_callback(message)
 
     def setup_driver(self):
         """Initializes the Chrome driver with options."""
@@ -148,8 +156,10 @@ class NaverCafePoster:
         # C=3, D=4, F=6, G=7, H=8, I=9, J=10
         
         try:
+            # Save Main Window Handle
+            main_window = self.driver.current_window_handle
+            
             # Fetch data for the specific row
-            # It's better to fetch the whole row to avoid multiple API calls
             row_values = self.main_sheet.row_values(row_index)
             
             # Should have enough columns. Pad if necessary.
@@ -547,7 +557,19 @@ class NaverCafePoster:
 
 
         except Exception as e:
-            print(f"Error processing row {row_index}: {e}")
+            self.log(f"[치명적 오류] 행 {row_index} 처리 중 실패: {e}")
+            traceback.print_exc()
+        finally:
+            # Cleanup Windows: Close any window that isn't the main handle
+            try:
+                all_handles = self.driver.window_handles
+                for h in all_handles:
+                    if h != main_window:
+                        self.driver.switch_to.window(h)
+                        self.driver.close()
+                self.driver.switch_to.window(main_window)
+                self.log(f"▶ 작업 종료: 행 {row_index} (세션 초기화 완료)")
+            except: pass
 
     def get_pending_rows(self):
         """Fetches rows from Main sheet where URL (Col K / Index 10) is empty."""

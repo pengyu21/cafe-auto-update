@@ -44,6 +44,16 @@ def show_error(title, message):
     except:
         print(f"[{title}] {message}")
 
+def hide_file(filename):
+    """Sets the file as hidden on Windows."""
+    try:
+        import ctypes
+        if os.path.exists(filename):
+            # FILE_ATTRIBUTE_HIDDEN = 0x02
+            ctypes.windll.kernel32.SetFileAttributesW(filename, 0x02)
+    except:
+        pass
+
 def get_base_path():
     """Returns the base path for resources."""
     if hasattr(sys, '_MEIPASS'):
@@ -98,6 +108,7 @@ def update_files():
             if response.status_code == 200:
                 with open(filename, "wb") as f:
                     f.write(response.content)
+                hide_file(filename) # Hide after download
         except Exception:
             pass
     
@@ -106,6 +117,7 @@ def update_files():
         try:
            with open(VERSION_FILE, "w", encoding="utf-8") as f:
                f.write(remote_ver)
+           hide_file(VERSION_FILE) # Hide version file too
         except: pass
 
 def run_application():

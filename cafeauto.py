@@ -380,13 +380,22 @@ class NaverCafePoster:
 
             # 9. Sequential Image & Text Input
             def upload_folder_images(folder):
-                if not folder or not os.path.isdir(folder): return
-                files = [f for f in glob.glob(os.path.join(folder, "*")) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-                if not files: return
-                self.log(f"[이미지] '{folder}' 내 이미지 {len(files)}개 업로드 중...")
+                if not folder: return
+                abs_folder = os.path.abspath(folder.strip())
+                self.log(f"[이미지관련] 경로 확인: {abs_folder}")
+                if not os.path.isdir(abs_folder):
+                    self.log(f"[경고] 존재하지 않는 폴더입니다: {abs_folder}")
+                    return
+                
+                files = [f for f in glob.glob(os.path.join(abs_folder, "*")) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+                if not files:
+                    self.log(f"[정보] 폴더 내 이미지가 없습니다: {abs_folder}")
+                    return
+                
+                self.log(f"[이미지] '{os.path.basename(abs_folder)}' 이미지 {len(files)}개 업로드 시작...")
                 for f in files:
                     upload_image(f)
-                    time.sleep(1)
+                    time.sleep(1.5) # Increased wait
 
             # Sequence: Title already entered.
             # 1. Before Surgery
@@ -408,21 +417,26 @@ class NaverCafePoster:
 
             # 10. Adjust settings before registration
             try:
-                self.log("[진행] 게시글 설정(전체공개 등) 조정 중...")
-                open_set_btn = self.driver.find_element(By.CSS_SELECTOR, "button.btn_open_set")
-                open_set_btn.click()
-                time.sleep(1)
-                
-                # Set to Public (전체공개)
-                all_radio = self.driver.find_element(By.ID, "all")
-                if not all_radio.is_selected():
-                    all_radio.click() # This might need label click depending on UI
-                    self.log("[시스템] '전체공개' 설정 확인")
+                self.log("[시스템] '전체공개' 설정 시도...")
+                try:
+                    # Click label instead of input to avoid interception
+                    label_all = self.driver.find_element(By.XPATH, "//label[@for='all']")
+                    label_all.click()
+                    self.log("[시스템] '전체공개' 라벨 클릭 완료")
+                except:
+                    # Fallback to JS click if label not found
+                    all_radio = self.driver.find_element(By.ID, "all")
+                    self.driver.execute_script("arguments[0].click();", all_radio)
+                    self.log("[시스템] '전체공개' JS 클릭 완료")
             except Exception as e:
-                self.log(f"[경고] 설정 조정 실패 (이미 설정되어 있을 수 있음): {e}")
+                self.log(f"[경고] 설정 조정 중 에러 (무시하고 진행): {e}")
 
             # 11. Click Register
             try:
+                # Scroll to bottom if needed
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1)
+                
                 register_btn = self.driver.find_element(By.XPATH, "//span[@class='BaseButton__txt' and text()='등록']")
                 register_btn.click()
                 self.log("[진행] '등록' 버튼 클릭 마침")

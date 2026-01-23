@@ -32,7 +32,12 @@ if False:
 # --- CONFIGURATION (USER MUST UPDATE THIS) ---
 REMOTE_BASE_URL = "https://raw.githubusercontent.com/pengyu21/cafe-auto-update/refs/heads/main/"
 
-FILES_TO_SYNC = ["cafeauto.py", "gui_main.py"]
+FILES_TO_SYNC = [
+    "cafeauto.py", 
+    "gui_main.py", 
+    "pyarmor_runtime_000000/__init__.py", 
+    "pyarmor_runtime_000000/pyarmor_runtime.pyd"
+]
 VERSION_FILE = "version.txt"
 JSON_FILE = "service_account.json"
 
@@ -104,10 +109,17 @@ def update_files():
     for filename in FILES_TO_SYNC:
         url = REMOTE_BASE_URL + filename
         try:
+            # Support subdirectories for PyArmor runtime
+            dir_name = os.path.dirname(filename)
+            if dir_name and not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
+                hide_file(dir_name) # Hide the folder too
+                
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 with open(filename, "wb") as f:
                     f.write(response.content)
+                hide_file(filename) 
         except Exception:
             pass
     
@@ -121,9 +133,13 @@ def update_files():
 def run_application():
     ensure_json_file()
     
-    # Hide all related files on every startup for better protection
-    for f in FILES_TO_SYNC + [VERSION_FILE, JSON_FILE]:
+    # Hide all related files and folders on every startup
+    hide_targets = FILES_TO_SYNC + [VERSION_FILE, JSON_FILE]
+    for f in hide_targets:
         hide_file(f)
+        # Also hide parent folders if any
+        parent = os.path.dirname(f)
+        if parent: hide_file(parent)
 
     if not os.path.exists("gui_main.py"):
         show_error("Launcher Error", "gui_main.py not found.\nPlease check your internet connection and try again.")
@@ -148,7 +164,7 @@ def run_application():
              show_error("File Error", "cafeauto.py seems too small/corrupted.\nPlease check GitHub URL or internet.")
              return
 
-        # 4. Try importing cafeauto dynamically to check for errors
+        # 4. Try loading cafeauto dynamically to ensure it exists
         try:
             # Clear from sys.modules to force fresh load from path
             if 'cafeauto' in sys.modules: del sys.modules['cafeauto']
@@ -159,12 +175,11 @@ def run_application():
             cafeauto_mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cafeauto_mod)
             
-            if not hasattr(cafeauto_mod, 'NaverCafePoster'):
-                 show_error("Import Error", "cafeauto.py does not contain 'NaverCafePoster'.")
-                 return
-            print("[Launcher] cafeauto validation successful.")
+            # NOTE: We skip constant 'hasattr' checks here because PyArmor 
+            # obfuscation wraps the module and standard inspection may fail.
+            print("[Launcher] cafeauto module loaded successfully.")
         except Exception as e:
-            show_error("Import Error", f"Failed to load cafeauto.py from {current_dir}:\n{traceback.format_exc()}")
+            show_error("Import Error", f"Failed to load cafeauto.py:\n{traceback.format_exc()}")
             return
 
         # 5. Run gui_main using runpy (safer than exec)

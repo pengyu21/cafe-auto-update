@@ -37,7 +37,7 @@ class NaverCafePoster:
         """Initializes the Chrome driver with options."""
         options = Options()
         # Headless Mode Settings
-        options.add_argument("--headless=new") 
+        # options.add_argument("--headless=new") 
         options.add_argument("--window-size=1920,1080")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         options.add_argument("--disable-gpu")
@@ -148,13 +148,16 @@ class NaverCafePoster:
                 # You might handle this more gracefully
                 pass
 
-            # Adjust indices because row_values is 0-indexed list
-            # C is index 2
-            user_id = row_values[2] if len(row_values) > 2 else ""
-            user_pw = row_values[3] if len(row_values) > 3 else ""
-            cafe_name_key = row_values[5] if len(row_values) > 5 else "" # F column
-            board_name = row_values[6] if len(row_values) > 6 else ""    # G column
-            title = row_values[7] if len(row_values) > 7 else ""         # H column
+            # Mapping based on user structure:
+            # A: Num(0), B: Date(1), C: Name(2), D: Title(3), E: Review(4), F: Keywords(5), G: Cafe(6), H: Board(7), I: Body(8), J: ImgPath(9)
+            
+            user_id = "zmzzang1397" # Fixed ID 
+            user_pw = "wjdgus1234!" # Fixed PW 
+            
+            cafe_name_key = row_values[6] if len(row_values) > 6 else "" # G column
+            board_name = row_values[7] if len(row_values) > 7 else ""    # H column
+            title = row_values[3] if len(row_values) > 3 else ""         # D column
+            review_text = row_values[4] if len(row_values) > 4 else ""   # E column
             content = row_values[8] if len(row_values) > 8 else ""       # I column
             image_folder = row_values[9] if len(row_values) > 9 else ""  # J column
 
@@ -177,36 +180,41 @@ class NaverCafePoster:
             self.driver.get(cafe_url)
             time.sleep(2)
 
-            # 4. Switch Iframe
+            # 4. Switch Iframe (IMMEDIATE)
+            self.log("[시스템] 메인 프레임(cafe_main) 진입 시도...")
             try:
-                WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                WebDriverWait(self.driver, 15).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                self.log("[시스템] 메인 프레임(cafe_main) 진입 완료")
             except:
                 self.log("[오류] cafe_main 프레임을 찾지 못했습니다.")
                 return
                 
             # 5. Click Board Name
+            self.log(f"[진행] 게시판 목록에서 '{board_name}' 찾는 중...")
             board_found = False
             try:
+                # 1st attempt: In cafe_main
                 board_link = self.driver.find_element(By.PARTIAL_LINK_TEXT, board_name)
                 board_link.click()
                 board_found = True
-                self.log(f"[진행] 게시판 접속: '{board_name}'")
+                self.log(f"[진행] 게시판 접속 성공: '{board_name}'")
             except NoSuchElementException:
-                pass
-            
-            if not board_found:
+                # 2nd attempt: Back to default content
+                self.log(f"[정보] '{board_name}'을(를) 현재 프레임에서 찾지 못함. 사이드 메뉴 탐색 중...")
                 self.driver.switch_to.default_content()
                 try:
                     board_link = self.driver.find_element(By.PARTIAL_LINK_TEXT, board_name)
                     board_link.click()
                     board_found = True
-                    self.log(f"[진행] 게시판 접속 (메인): '{board_name}'")
-                    time.sleep(0.5) 
+                    self.log(f"[진행] 게시판 접속 성공 (사이드 메뉴): '{board_name}'")
+                    # Many cafes load board in cafe_main after click
+                    time.sleep(1)
                     try:
-                         WebDriverWait(self.driver, 5).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                        WebDriverWait(self.driver, 10).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "cafe_main")))
+                        self.log("[시스템] 게시판 이동 후 cafe_main 재진입 성공")
                     except: pass
                 except NoSuchElementException:
-                    self.log(f"[오류] 게시판을 찾을 수 없음: '{board_name}'")
+                    self.log(f"[오류] 게시판을 찾을 수 없습니다: '{board_name}'")
                     return
 
             time.sleep(1) # Sleep reduced
@@ -475,13 +483,13 @@ class NaverCafePoster:
             else:
                 # Check Col K (index 10)
                 url = row[10].strip()
-                if not url and row[2].strip(): # Empty URL and has ID
+                if not url and row[2].strip(): # Empty URL and has Name (C column)
                      pending_rows.append({
                          'index': i + 1,
-                         'name': row[1] if len(row) > 1 else "", # Col B (Index 1)
-                         'cafe': row[5],
-                         'board': row[6],
-                         'title': row[7],
+                         'name': row[2] if len(row) > 2 else "", # Col C (Index 2)
+                         'cafe': row[6] if len(row) > 6 else "", # Col G (Index 6)
+                         'board': row[7] if len(row) > 7 else "", # Col H (Index 7)
+                         'title': row[3] if len(row) > 3 else "", # Col D (Index 3)
                          'review_text': row[4] if len(row) > 4 else "" # Col E (Index 4)
                      })
                      

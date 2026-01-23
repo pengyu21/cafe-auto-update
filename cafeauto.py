@@ -148,21 +148,25 @@ class NaverCafePoster:
                 # You might handle this more gracefully
                 pass
 
-            # Correct Mapping (0-indexed) based on NEW 11-column structure:
-            # B(1)=Name, C(2)=ID, D(3)=PW, E(4)=BeforeFolder, F(5)=AfterFolder, G(6)=Cafe, H(7)=Board, I(8)=Title, J(9)=Body, K(10)=File, L(11)=URL
+            # Correct Mapping (0-indexed) based on LATEST structure:
+            # B(1)=Name, C(2)=ID, D(3)=PW, E(4)=BeforeText, F(5)=AfterText, G(6)=Cafe, H(7)=Board, I(8)=Title, J(9)=Body, K(10)=Folder, L(11)=URL
             
-            user_id = row_values[2] if len(row_values) > 2 else "" # C column
-            user_pw = row_values[3] if len(row_values) > 3 else "" # D column
+            self.log(f"[디그버] 행 {row_index} 원본 데이터: {row_values}")
             
-            before_folder = row_values[4] if len(row_values) > 4 else "" # E column
-            after_folder = row_values[5] if len(row_values) > 5 else ""  # F column
+            user_id = row_values[2].strip() if len(row_values) > 2 else "" # C column
+            user_pw = row_values[3].strip() if len(row_values) > 3 else "" # D column
             
-            cafe_name_key = row_values[6] if len(row_values) > 6 else "" # G column
-            board_name = row_values[7] if len(row_values) > 7 else ""    # H column
-            title = row_values[8] if len(row_values) > 8 else ""         # I column
-            body_text = row_values[9] if len(row_values) > 9 else ""     # J column
-            image_folder = row_values[10] if len(row_values) > 10 else "" # K column
+            before_text = row_values[4].strip() if len(row_values) > 4 else "" # E column
+            after_text = row_values[5].strip() if len(row_values) > 5 else ""  # F column
             
+            cafe_name_key = row_values[6].strip() if len(row_values) > 6 else "" # G column
+            board_name = row_values[7].strip() if len(row_values) > 7 else ""    # H column
+            title = row_values[8].strip() if len(row_values) > 8 else ""         # I column
+            body_text = row_values[9].strip() if len(row_values) > 9 else ""     # J column
+            image_folder = row_values[10].strip() if len(row_values) > 10 else "" # K column
+            
+            self.log(f"[정보] 데이터 매핑: BeforeText='{before_text}', AfterText='{after_text}', Folder='{image_folder}'")
+
             if not user_id or not cafe_name_key:
                 self.log(f"[건너뜀] 행 {row_index}: ID 또는 카페명이 누락되었습니다.")
                 return
@@ -321,8 +325,9 @@ class NaverCafePoster:
                 try:
                     body_elem = self.driver.find_element(By.XPATH, "//div[contains(@class, 'se-content')] | //div[contains(@class, 'se-main_container')]")
                     body_elem.click()
-                    time.sleep(0.5)
+                    time.sleep(1) # Increased focus wait
                     webdriver.ActionChains(self.driver).key_down(Keys.CONTROL).send_keys(Keys.END).key_up(Keys.CONTROL).perform()
+                    time.sleep(0.5) # Increased end-jump wait
                     time.sleep(0.2)
                     pyperclip.copy(text)
                     actions = webdriver.ActionChains(self.driver)
@@ -334,18 +339,31 @@ class NaverCafePoster:
             def upload_image(path):
                 if not path: return
                 self.log(f"[이미지] 업로드 시도: {path}...")
-                uploaded = False
                 try:
-                    for _ in range(3):
+                    # 1. Try to find the image button and click it to ensure the editor is ready
+                    image_selectors = [
+                        (By.CSS_SELECTOR, "button.se-image-toolbar-button"),
+                        (By.CSS_SELECTOR, ".se-toolbar-button-image"),
+                        (By.XPATH, "//button[contains(@class, 'se-image-toolbar-button')]"),
+                        (By.XPATH, "//button[contains(@class, 'image')]")
+                    ]
+                    
+                    img_btn = None
+                    for by, val in image_selectors:
                         try:
-                            img_btn = self.driver.find_element(By.CSS_SELECTOR, ".se-image-toolbar-button")
-                            img_btn.click()
-                            time.sleep(1)
-                            break
-                        except: time.sleep(1)
+                            img_btn = self.driver.find_element(by, val)
+                            if img_btn: break
+                        except: continue
+                    
+                    if img_btn:
+                        img_btn.click()
+                        time.sleep(1)
+                    else:
+                        self.log("[경고] 이미지 버튼을 찾지 못했습니다. 바로 파일 입력 시도...")
 
+                    # 2. Find file input
                     file_input = None
-                    for _ in range(3):
+                    for _ in range(5): # Increased retries
                         try:
                              file_inputs = self.driver.find_elements(By.XPATH, "//input[@type='file']")
                              if file_inputs:
@@ -355,18 +373,19 @@ class NaverCafePoster:
                             
                     if file_input:
                         try:
+                            # Show hidden input
                             self.driver.execute_script("arguments[0].style.display = 'block'; arguments[0].style.visibility = 'visible'; arguments[0].style.opacity = '1';", file_input)
-                            file_input.send_keys(path)
-                            uploaded = True
-                            time.sleep(4)
+                            file_input.send_keys(os.path.abspath(path))
+                            self.log(f"[성공] 이미지 업로드 완료: {os.path.basename(path)}")
+                            time.sleep(6) # Increased wait for render
                             try: webdriver.ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
                             except: pass
                         except Exception as inner_e:
                              self.log(f"[경고] 이미지 입력 오류: {inner_e}")
                     else:
-                        self.log("[오류] 파일 입력창 못찾음")
+                        self.log("[오류] 파일 입력창을 끝내 찾지 못했습니다.")
                 except Exception as e:
-                    self.log(f"[오류] 이미지 업로드 실패: {e}")
+                    self.log(f"[오류] 이미지 업로드 기능 실패: {e}")
 
             def insert_newlines(count=1):
                 try:
@@ -378,58 +397,67 @@ class NaverCafePoster:
                     time.sleep(0.5)
                 except: pass
 
-            # 9. Sequential Image & Text Input
-            def upload_folder_images(folder):
-                if not folder: return
-                abs_folder = os.path.abspath(folder.strip())
-                self.log(f"[이미지관련] 경로 확인: {abs_folder}")
-                if not os.path.isdir(abs_folder):
-                    self.log(f"[경고] 존재하지 않는 폴더입니다: {abs_folder}")
-                    return
-                
-                files = [f for f in glob.glob(os.path.join(abs_folder, "*")) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-                if not files:
-                    self.log(f"[정보] 폴더 내 이미지가 없습니다: {abs_folder}")
-                    return
-                
-                self.log(f"[이미지] '{os.path.basename(abs_folder)}' 이미지 {len(files)}개 업로드 시작...")
-                for f in files:
-                    upload_image(f)
-                    time.sleep(1.5) # Increased wait
+            # 9. Clarified Sequential Input: Title -> 전 Img -> E Text -> 후 Img -> F Text -> J Body
+            
+            # Helper to ensure folder exists
+            abs_folder = os.path.abspath(image_folder)
+            self.log(f"[이미지관련] 통합 경로 확인: {abs_folder}")
+            
+            if not os.path.isdir(abs_folder):
+                self.log(f"[경고] 사진 폴더를 찾을 수 없습니다: {abs_folder}")
+            else:
+                # 1. Before Image (전)
+                img_before = self.find_image_file(abs_folder, "전")
+                if img_before:
+                    self.log("[진행] '전' 이미지 업로드 시작")
+                    upload_image(img_before)
+                    insert_newlines(1)
+                    if before_text:
+                        self.log(f"[본문] '수술 전' 설명(E열) 입력: {before_text}")
+                        append_text(before_text)
+                    insert_newlines(2)
+                else:
+                    self.log("[정보] '전' 이미지를 찾지 못했습니다.")
 
-            # Sequence: Title already entered.
-            # 1. Before Surgery
-            if before_folder:
-                upload_folder_images(before_folder)
-                insert_newlines(1)
-            
-            # 2. After Surgery
-            if after_folder:
-                upload_folder_images(after_folder)
-                insert_newlines(1)
-            
-            # 3. Body Text
-            if body_text:
-                self.log(f"[본문] 내용 입력 중 ({len(body_text)}자)...")
-                append_text(body_text)
+                # 2. After Image (후) & Description (F) & Body (J)
+                img_after = self.find_image_file(abs_folder, "후")
+                if img_after:
+                    self.log("[진행] '후' 이미지 업로드 시작")
+                    upload_image(img_after)
+                    insert_newlines(1)
+                    
+                    # Combine F and J to guarantee order (F above J)
+                    combined_text = ""
+                    if after_text:
+                        combined_text += after_text + "\n\n"
+                        self.log("[정보] '후' 설명(F) 결합 완료")
+                    if body_text:
+                        combined_text += body_text
+                        self.log("[정보] 메인 본문(J) 결합 완료")
+                    
+                    if combined_text:
+                        self.log(f"[본문] F+J 통합 내용 입력 시작 ({len(combined_text)}자)")
+                        append_text(combined_text)
+                    else:
+                        self.log("[정보] 입력할 본문 내용(F, J)이 없습니다.")
+                else:
+                    self.log("[정보] '후' 이미지를 찾지 못했습니다. 본문(J)만 입력 시도.")
+                    if body_text:
+                        append_text(body_text)
 
             time.sleep(2)
 
             # 10. Adjust settings before registration
             try:
-                self.log("[시스템] '전체공개' 설정 시도...")
                 try:
-                    # Click label instead of input to avoid interception
-                    label_all = self.driver.find_element(By.XPATH, "//label[@for='all']")
-                    label_all.click()
-                    self.log("[시스템] '전체공개' 라벨 클릭 완료")
-                except:
-                    # Fallback to JS click if label not found
+                    self.log("[시스템] '전체공개' 설정 시도 (JS)...")
                     all_radio = self.driver.find_element(By.ID, "all")
                     self.driver.execute_script("arguments[0].click();", all_radio)
-                    self.log("[시스템] '전체공개' JS 클릭 완료")
+                    self.log("[시스템] '전체공개' 설정 완료")
+                except Exception as inner_e:
+                    self.log(f"[경고] 설정 클릭 실패: {inner_e}")
             except Exception as e:
-                self.log(f"[경고] 설정 조정 중 에러 (무시하고 진행): {e}")
+                self.log(f"[경고] 설정 메뉴 열기 실패 (이미 열려있을 수 있음): {e}")
 
             # 11. Click Register
             try:
@@ -519,32 +547,32 @@ class NaverCafePoster:
         all_values = self.main_sheet.get_all_values()
         pending_rows = []
         
+        self.log(f"[디버그] 시트 전체 행 수: {len(all_values)}")
+        if len(all_values) >= 4:
+            test_row = all_values[3]
+            self.log(f"[디버그] 4행 데이터 샘플: 이름={test_row[1] if len(test_row)>1 else 'N/A'}, URL필드={test_row[11] if len(test_row)>11 else 'N/A'}")
+
         # Start from row 4 (index 3)
         for i in range(3, len(all_values)):
             row = all_values[i]
-            # Check if sufficient columns (L is index 11)
-            if len(row) < 12:
-                 if len(row) > 1 and row[1].strip(): # Has Name (B column)
-                     pending_rows.append({
-                         'index': i + 1,
-                         'name': row[1] if len(row) > 1 else "",           # Col B (Index 1)
-                         'cafe': row[6] if len(row) > 6 else "",           # Col G (Index 6)
-                         'board': row[7] if len(row) > 7 else "",          # Col H (Index 7)
-                         'title': row[8] if len(row) > 8 else "",          # Col I (Index 8)
-                         'review_text': row[4] if len(row) > 4 else ""     # Col E (Index 4)
-                     })
-            else:
-                # Check Col L (index 11)
-                url = row[11].strip()
-                if not url and len(row) > 1 and row[1].strip(): # Has Name (B column)
-                     pending_rows.append({
-                         'index': i + 1,
-                         'name': row[1] if len(row) > 1 else "", 
-                         'cafe': row[6] if len(row) > 6 else "",
-                         'board': row[7] if len(row) > 7 else "",
-                         'title': row[8] if len(row) > 8 else "",
-                         'review_text': row[4] if len(row) > 4 else ""
-                     })
+            # Ensure row has at least Column B
+            if len(row) <= 1: continue 
+            
+            name = row[1].strip()
+            if not name: continue # Skip empty rows
+            
+            # Check Column L (index 11) for Post URL
+            url = row[11].strip() if len(row) > 11 else ""
+            
+            if not url:
+                 pending_rows.append({
+                     'index': i + 1,
+                     'name': name,
+                     'cafe': row[6] if len(row) > 6 else "",
+                     'board': row[7] if len(row) > 7 else "",
+                     'title': row[8] if len(row) > 8 else "",
+                     'review_text': row[4] if len(row) > 4 else ""
+                 })
                      
         return pending_rows
 

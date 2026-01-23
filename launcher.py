@@ -108,7 +108,6 @@ def update_files():
             if response.status_code == 200:
                 with open(filename, "wb") as f:
                     f.write(response.content)
-                hide_file(filename) # Hide after download
         except Exception:
             pass
     
@@ -117,12 +116,15 @@ def update_files():
         try:
             with open(VERSION_FILE, "w", encoding="utf-8") as f:
                 f.write(remote_ver)
-            hide_file(VERSION_FILE) # Hide version file too
         except: pass
 
 def run_application():
     ensure_json_file()
     
+    # Hide all related files on every startup for better protection
+    for f in FILES_TO_SYNC + [VERSION_FILE, JSON_FILE]:
+        hide_file(f)
+
     if not os.path.exists("gui_main.py"):
         show_error("Launcher Error", "gui_main.py not found.\nPlease check your internet connection and try again.")
         return

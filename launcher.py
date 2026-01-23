@@ -115,9 +115,9 @@ def update_files():
     remote_ver = get_remote_version()
     if remote_ver:
         try:
-           with open(VERSION_FILE, "w", encoding="utf-8") as f:
-               f.write(remote_ver)
-           hide_file(VERSION_FILE) # Hide version file too
+            with open(VERSION_FILE, "w", encoding="utf-8") as f:
+                f.write(remote_ver)
+            hide_file(VERSION_FILE) # Hide version file too
         except: pass
 
 def run_application():

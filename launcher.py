@@ -80,7 +80,8 @@ def ensure_json_file():
 def get_remote_version():
     try:
         url = REMOTE_BASE_URL + VERSION_FILE
-        response = requests.get(url, timeout=5)
+        # Reduced timeout to 2s to prevent long hangs on slow connections
+        response = requests.get(url, timeout=2)
         if response.status_code == 200:
             return response.text.strip()
         else:

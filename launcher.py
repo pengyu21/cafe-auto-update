@@ -74,8 +74,11 @@ def ensure_json_file():
     if os.path.exists(bundled_path):
         try:
             shutil.copy(bundled_path, JSON_FILE)
+            hide_file(JSON_FILE) # Hide it after extracting
         except Exception as e:
             show_error("Launcher Error", f"Failed to extract {JSON_FILE}: {e}")
+    else:
+        print(f"[Launcher] Warning: {JSON_FILE} not found in bundle.")
 
 def get_remote_version():
     try:

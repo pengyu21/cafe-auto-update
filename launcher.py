@@ -79,9 +79,12 @@ def ensure_json_file():
 
 def get_remote_version():
     try:
-        url = REMOTE_BASE_URL + VERSION_FILE
-        # Reduced timeout to 2s to prevent long hangs on slow connections
-        response = requests.get(url, timeout=2)
+        # Add timestamp to bypass cache
+        url = REMOTE_BASE_URL + VERSION_FILE + f"?t={time.time()}"
+        print(f"[Launcher] Checking version from: {url}")
+        
+        # Increased timeout to 5s
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             return response.text.strip()
         else:
@@ -105,10 +108,12 @@ def get_local_version():
     return "0.0.0"
 
 def update_files():
+    print("[Launcher] Starting update process...")
     # In windowed mode, we can't print easily. 
     # Just try download. If fail, we proceed with old files.
     for filename in FILES_TO_SYNC:
-        url = REMOTE_BASE_URL + filename
+        # Add timestamp to bypass cache
+        url = REMOTE_BASE_URL + filename + f"?t={time.time()}"
         try:
             # Support subdirectories for PyArmor runtime
             dir_name = os.path.dirname(filename)
@@ -116,12 +121,14 @@ def update_files():
                 os.makedirs(dir_name, exist_ok=True)
                 hide_file(dir_name) # Hide the folder too
                 
-            response = requests.get(url, timeout=10)
+            print(f"[Launcher] Downloading {filename}...")
+            response = requests.get(url, timeout=15) # Increased timeout
             if response.status_code == 200:
                 with open(filename, "wb") as f:
                     f.write(response.content)
                 hide_file(filename) 
-        except Exception:
+        except Exception as e:
+            print(f"[Launcher] Failed to download {filename}: {e}")
             pass
     
     remote_ver = get_remote_version()
@@ -129,6 +136,7 @@ def update_files():
         try:
             with open(VERSION_FILE, "w", encoding="utf-8") as f:
                 f.write(remote_ver)
+            print(f"[Launcher] Updated version.txt to {remote_ver}")
         except: pass
 
 def run_application():
@@ -194,6 +202,7 @@ def run_application():
 def main():
     # Only try update if we can access the server
     try:
+        print("[Launcher] Checking for updates...")
         local_ver = get_local_version()
         remote_ver = get_remote_version()
         

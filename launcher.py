@@ -209,7 +209,13 @@ def main():
         local_ver = get_local_version()
         remote_ver = get_remote_version()
         
-        if remote_ver and parse_version(remote_ver) > parse_version(local_ver):
+        # Check missing files (Self-Healing)
+        missing_critical_files = [f for f in ["gui_main.py", "cafeauto.py"] if not os.path.exists(f)]
+        
+        if missing_critical_files:
+             print(f"[Launcher] Critical files missing ({', '.join(missing_critical_files)}). Forcing update...")
+             update_files()
+        elif remote_ver and parse_version(remote_ver) > parse_version(local_ver):
              print(f"[Launcher] New version available: {remote_ver} (Current: {local_ver})")
              update_files()
     except Exception as e:
